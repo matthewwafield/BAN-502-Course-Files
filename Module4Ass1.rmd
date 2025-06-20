@@ -1,0 +1,82 @@
+# BAN 502
+
+## Module 4 Assignment 1 Missing Data
+
+### Matthew Field
+
+
+```{r loading data}
+library(tidyverse)
+library(VIM)
+library(mice)
+library(naniar) #visualizing missingness
+library(skimr) #alternative way to view dataset summaries
+library(UpSetR) #visualizing missingness
+grades <- read_csv("class-grades.csv")
+```
+
+Step 1 is to review for missing data
+
+
+```{r Task 1}
+skim_grades <- skim(grades)
+skim(grades)
+summary(grades)
+sum(skim_grades$n_missing)
+```
+
+
+There are 11 total missing variables in 4 of the variables.
+The variables are also all numeric, so no need to change to factors.
+
+```{r Task 2}
+vim_plot = aggr(grades, numbers = TRUE, prop = c(TRUE, FALSE),cex.axis=.7)
+vis_miss(grades) #from the naniar package
+gg_miss_upset(grades, nsets = 4) #from the UpSetR package, must have at least two variables with missingness to use this plot
+#note nsets = 7 refers to then number of variables to show in the plot. I chose 7 as there are 7 variables with missingness
+```
+
+
+
+1 student is missing takehome and midterm
+
+```{r deletion}
+# Column deletion
+grades_coldel = grades %>% 
+  select(Prefix, Assignment) 
+
+# Row deletion
+grades_rowdel = grades %>% 
+  drop_na() 
+```
+
+Task 5
+
+Row deletion seems more appropriate for this data set. Just going off of counting the data deleted, row deletion removes 10 rows, or 60 entries, column deletion removes 4 columns or almost 400 entries. If your goal is to analyze the dataset, removing 2/3 of the dataset is likely not helpful. Each dataset needs to be carefully considered, however, and the intent and meaning behind the data is important to consider before manipulating any dataset. And the ethics of data manipulation should always be considered. 
+
+
+Finally, imputation. Let's use the "mice" package to do imputation.  
+
+```{r Task 6}
+set.seed(123) #sets seed for random number generator
+imp_grades = mice(grades, m=5, method='pmm', printFlag=FALSE)
+#m is the number of imputations, 5 is a reasonable value as a default
+#pmm is "predictive mean matching" = imputation method for numeric data
+#printFlag reduces amount of output
+summary(imp_grades)
+summary(grades)
+
+#need to merge data set first, have not added missing variables yet
+```
+
+```{r}
+densityplot(imp_grades, ~Final) #red imputed, blue original
+```
+
+Merge the imputed values into our titanic data frame 
+
+```{r}
+grades_complete = complete(imp_grades) 
+summary(grades_complete)
+```
+```

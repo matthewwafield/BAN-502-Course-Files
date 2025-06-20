@@ -1,0 +1,223 @@
+# BAN 502 Predictive Analytics
+
+## Module 4 Assignment 3 Random Forests
+
+### Matthew Field
+
+
+```{r load packages}
+library("tidyverse")
+library("tidymodels")
+library("caret")
+library("gridExtra")
+library("vip")
+library("ranger")
+library(skimr)
+drug <- read_csv("drug_data-2.csv")
+```
+
+Data cleaning
+
+```{r cleaning}
+#adding titles
+
+names(drug) = c("ID", "Age", "Gender", "Education", "Country", "Ethnicity",
+"Nscore", "Escore", "Oscore", "Ascore", "Cscore", "Impulsive",
+"SS", "Alcohol", "Amphet", "Amyl", "Benzos", "Caff", "Cannabis",
+"Choc", "Coke", "Crack", "Ecstasy", "Heroin", "Ketamine", "Legalh",
+"LSD", "Meth", "Mushrooms", "Nicotine", "Semer", "VSA")
+
+#changing when use was to yes or no
+
+drug[drug == "CL0"] = "No"
+drug[drug == "CL1"] = "No"
+drug[drug == "CL2"] = "Yes"
+drug[drug == "CL3"] = "Yes"
+drug[drug == "CL4"] = "Yes"
+drug[drug == "CL5"] = "Yes"
+drug[drug == "CL6"] = "Yes"
+
+#factor recoding
+
+drug_clean = drug %>% 
+  mutate_at(vars(Age:Ethnicity), funs(as_factor)) %>%
+  mutate(Age = factor(Age, labels = c("18_24", "25_34", "35_44", "45_54",
+                                      "55_64", "65_"))) %>%
+  mutate(Gender = factor(Gender, labels = c("Male", "Female"))) %>%
+  mutate(Education = factor(Education, labels = c("Under16", "At16", 
+                                                  "At17", "At18",
+                                                  "SomeCollege",
+                                                  "ProfessionalCert", 
+                                                  "Bachelors", "Masters", 
+                                                  "Doctorate"))) %>%
+  mutate(Country = factor(Country, labels = c("USA", "NewZealand", 
+                                              "Other", "Australia",
+                                              "Ireland","Canada","UK"))) %>%
+  mutate(Ethnicity = factor(Ethnicity, labels = c("Black", "Asian", "White",
+                                                  "White/Black", "Other",
+                                                  "White/Asian", 
+                                                  "Black/Asian"))) %>%
+  mutate_at(vars(Alcohol:VSA), funs(as_factor)) %>%
+  select(-ID)
+
+str(drug_clean)
+```
+
+
+we are focusing on nicotine, so I will remove all other drugs
+
+```{r focus on nicotine}
+drug_clean = drug_clean %>% select(!(Alcohol:Mushrooms)) %>% select(!(Semer:VSA))
+
+```
+
+```{r checking data set}
+summary(drug_clean)
+skim(drug_clean)
+
+```
+
+There is no missing data in the dataset
+
+now can start going to work, start by splitting,
+
+```{r}
+set.seed(1234) 
+drug_split = initial_split(drug_clean, prop = 0.7, strata = Nicotine) #70% in training
+train = training(drug_split)
+test = testing(drug_split)
+```
+
+1318 are in training set
+
+visualization
+```{r}
+p1 = ggplot(train, aes(x = Age, fill = Nicotine)) + 
+  geom_bar(position = "fill")
+p2 = ggplot(train, aes(x = Impulsive, fill = Nicotine)) + 
+  geom_bar(position = "fill")
+p3 = ggplot(train, aes(x = Gender, fill = Nicotine)) + 
+  geom_bar(position = "fill")
+p4 = ggplot(train, aes(x = Ethnicity, fill = Nicotine)) + 
+  geom_bar(position = "fill")
+grid.arrange(p1,p2,p3,p4)
+```
+
+You are less likely to smoke as you get older, so true
+
+higher impulsiveness are also more likely to smoke, so true.
+
+
+Set up our folds for cross-validation  
+```{r}
+set.seed(123)
+rf_folds = vfold_cv(train, v = 5)
+```
+
+
+Random forest with an R-defined tuning grid (this model took about 5 minutes to run)
+```{r}
+drug_recipe = recipe(Nicotine ~., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+rf_model = rand_forest(mtry = tune(), min_n = tune(), trees = 100) %>% #add tuning of mtry and min_n parameters
+  #setting trees to 100 here should also speed things up a bit, but more trees might be better
+  set_engine("ranger", importance = "permutation") %>% #added importance metric
+  set_mode("classification")
+
+drug_wflow = 
+  workflow() %>% 
+  add_model(rf_model) %>% 
+  add_recipe(drug_recipe)
+
+set.seed(123)
+rf_res = tune_grid(
+  drug_wflow,
+  resamples = rf_folds,
+  grid = 10 #try 10 different combinations of the random forest tuning parameters
+)
+```
+
+Refining the parameters  
+```{r}
+drug_recipe2 = recipe(Nicotine ~., train) %>%
+  step_dummy(all_nominal(), -all_outcomes())
+
+rf_model2 = rand_forest(mtry = tune(), min_n = tune(), trees = 100) %>% #add tuning of mtry and min_n parameters
+  #setting trees to 100 here should also speed things up a bit, but more trees might be better
+  set_engine("ranger", importance = "permutation") %>% #added importance metric
+  set_mode("classification")
+
+drug_wflow2 = 
+  workflow() %>% 
+  add_model(rf_model2) %>% 
+  add_recipe(drug_recipe2)
+
+rf_grid2 = grid_regular(
+  mtry(range = c(2, 8)), #these values determined through significant trial and error
+  min_n(range = c(5, 20)), #these values determined through significant trial and error
+  levels = 10
+)
+
+set.seed(123)
+rf_res_tuned = tune_grid(
+  drug_wflow2,
+  resamples = rf_folds,
+  grid = rf_grid2 #use the tuning grid
+)
+```
+
+
+An alternate view of the parameters  
+```{r}
+rf_res_tuned %>%
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
+  mutate(min_n = factor(min_n)) %>%
+  ggplot(aes(mtry, mean, color = min_n)) +
+  geom_line(alpha = 0.5, size = 1.5) +
+  geom_point() +
+  labs(y = "Accuracy")
+```
+
+
+
+select the best parameters
+```{r}
+best_rf = select_best(rf_res_tuned, metric="accuracy")
+
+final_rf = finalize_workflow(
+  churn_wflow,
+  best_rf
+)
+
+final_rf
+```
+```{r}
+#fit the finalized workflow to our training data
+final_rf_fit = fit(final_rf, train)
+```
+
+Predictions  
+```{r}
+trainpredrf = predict(final_rf_fit, train)
+head(trainpredrf)
+```
+
+Confusion matrix
+```{r}
+confusionMatrix(trainpredrf$.pred_class, train$Nicotine, 
+                positive = "Yes")
+```
+Predictions on test
+```{r}
+testpredrf = predict(final_rf_fit, test)
+head(testpredrf)
+confusionMatrix(testpredrf$.pred_class, test$Nicotine, 
+                positive = "Yes")
+```
+
+Check out variable importance
+```{r}
+final_rf_fit %>% pull_workflow_fit() %>% vip(geom = "point")
+```

@@ -1,0 +1,108 @@
+# BAN 502 Predictive Analytics
+
+## Module 2 Assigment 2 Multiple Linear Regression (MLR)
+
+### Matthew Field 05/26/25
+
+```{r load information}
+library(tidyverse) #tidyverse set of packages and functions
+library(tidymodels)
+library(glmnet) #for Lasso, ridge, and elastic net models 
+library(GGally) #create ggcorr and ggpairs plots
+library(ggcorrplot) #create an alternative to ggcorr plots
+library(MASS) #access to forward and backward selection algorithms
+library(leaps) #best subset selection
+library(lmtest) #for the dw test
+library(splines) #for nonlinear fitting
+
+bike <- read_csv("bike_cleaned-3.csv")
+bike = bike %>%
+  mutate(dteday = mdy(dteday)) %>%
+  mutate_if(is.character, as_factor) %>%
+  mutate(hr = as_factor(hr))
+```
+
+Question 1, checking correlation with count
+
+```{r Question 1}
+ggcorr(bike, label = TRUE, label_round = 3)
+```
+
+Question 1, comparing windspeed, hum, atemp, and temp, temp is highest.
+
+Question 2 Boxplot
+
+```{r Question 2}
+ggplot(bike,aes(x=season,y=count)) + 
+  geom_boxplot() + 
+  geom_jitter(alpha = 0.15) + 
+  theme_bw()
+```
+summer has the most bike rides
+
+```{r Question 3}
+bike_recipe = recipe(count ~ hr, bike)
+lm_model = 
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_wflow = 
+  workflow() %>%
+  add_model(lm_model) %>%
+  add_recipe(bike_recipe)
+
+lm_fit = fit(lm_wflow, bike)
+
+summary(lm_fit$fit$fit$fit)
+```
+
+because we set hr to be a factor, there are 24 hours, and therefore 23 dummy variables.
+
+hr24 is the base model because it is not shown. it basically has a b_n of 0
+
+hr 17 has the highest number of rides with a max slope of 408
+
+```{r Question 6}
+ggplot(bike, aes(x=temp, y=count)) + geom_point() + geom_smooth(method = lm) + theme_bw()
+```
+
+```{r Question 7}
+bike_recipe2 = recipe(count ~ hr + temp, bike)
+lm_model2 = 
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_wflow2 = 
+  workflow() %>%
+  add_model(lm_model2) %>%
+  add_recipe(bike_recipe2)
+
+lm_fit2 = fit(lm_wflow2, bike)
+
+summary(lm_fit2$fit$fit$fit)
+```
+
+
+```{r Question 9}
+bike_recipe3 = recipe(count ~ atemp + temp, bike)
+lm_model3 = 
+  linear_reg() %>%
+  set_engine("lm")
+
+lm_wflow3 = 
+  workflow() %>%
+  add_model(lm_model3) %>%
+  add_recipe(bike_recipe3)
+
+lm_fit3 = fit(lm_wflow3, bike)
+
+summary(lm_fit3$fit$fit$fit)
+```
+
+```{r backward}
+allmod = lm(count ~., bike)
+backmod = stepAIC(allmod, direction = "backward", trace = TRUE) #trace = TRUE shows how the model is built (which variables are removed)
+summary(backmod)
+```
+
+

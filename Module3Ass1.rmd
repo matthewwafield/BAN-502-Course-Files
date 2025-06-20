@@ -1,0 +1,91 @@
+# BAN 502 Predictive Analytics
+
+## Module 3 Assignment 2
+
+### Matthew, Field
+
+
+```{r loading data}
+library(tidyverse)
+library(tidymodels)
+library(GGally)
+library(lmtest)
+bike <- read_csv("bike_cleaned-4.csv")
+```
+
+```{r modifying bike}
+bike = bike %>%
+  mutate(dteday = mdy(dteday)) %>%
+  mutate_if(is.character, as_factor) %>%
+  mutate(hr = as_factor(hr))
+```
+
+converted everything character to factor, converted hr to factor, formated days
+
+Split  
+
+```{r splitting dataset}
+set.seed(1234)
+bike_split = initial_split(bike, prop = 0.70, strata = count)
+train = training(bike_split)
+test = testing(bike_split)
+```
+
+Linear Regression Model
+
+```{r Question 3}
+bike_simple = recipe(count ~ season + mnth + hr + holiday + weekday +
+                       temp + weathersit, train)
+
+#Next we specify the type of model that we are building.  
+lm_model = #give the model type a name 
+  linear_reg() %>% #specify that we are doing linear regression
+  set_engine("lm") #specify the specify type of linear tool we want to use 
+
+ 
+#Next we combine the recipe and the model with a workflow.  
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(bike_simple)
+
+ 
+#Next we fit (execute) the workflow on our dataset.  
+
+lm_fit = fit(lm_wflow, train)
+summary(lm_fit$fit$fit$fit)
+```
+
+```{r splitting dataset}
+set.seed(1234)
+bike_split = initial_split(bike, prop = 0.70, strata = count)
+train = training(bike_split)
+test = testing(bike_split)
+```
+
+Linear Regression Model
+
+```{r Question 5}
+bike_simple2 = recipe(count ~ season + mnth + hr + holiday + weekday +
+                       temp + weathersit, train)
+
+#Next we specify the type of model that we are building.  
+lm_model2 = #give the model type a name 
+  linear_reg() %>% #specify that we are doing linear regression
+  set_engine("lm") #specify the specify type of linear tool we want to use 
+
+ 
+#Next we combine the recipe and the model with a workflow.  
+
+lm_wflow2 = 
+  workflow() %>% 
+  add_model(lm_model2) %>% 
+  add_recipe(bike_simple2)
+
+ 
+#Next we fit (execute) the workflow on our dataset.  
+
+lm_fit = fit(lm_wflow, test)
+summary(lm_fit$fit$fit$fit)
+```

@@ -1,0 +1,213 @@
+# BAN 502 Predictive Analytics
+
+## Module 2, 1st R Assignment
+
+### Matthew Field
+
+```{r load packages and data}
+library(tidyverse)
+library(tidymodels)
+library(e1071)
+library(ROCR)
+parole <- read_csv("parole.csv")
+parole = parole %>%
+  mutate(male = as_factor(male)) %>%
+  mutate(race = as_factor(race)) %>%
+  mutate(state = as_factor(state)) %>%
+  mutate(crime = as_factor(crime)) %>%
+  mutate(multiple.offenses = as_factor(multiple.offenses)) %>%
+  mutate(violator = as_factor(violator))
+```
+
+
+
+Q1 is 78
+
+Split  
+```{r Q2}
+set.seed(12345)
+parole_split = initial_split(parole, prop = 0.70, strata = violator)
+train = training(parole_split)
+test = testing(parole_split)
+```
+
+
+```{r reorganize Y N}
+train = train %>% mutate(violator = fct_relevel(violator, c("0","1")))
+levels(train$violator)
+```
+
+
+```{r}
+Table1 = table(parole$male, parole$violator)
+Table1
+```
+
+Rows first, columns second, so, 116 female non violators, 14, female violators
+481 male non violators, 64 male violators
+
+```{r Question 3}
+maleRate <- Table1[2,2]/(Table1[2,1] + Table1[2,2])
+femaleRate <- Table1[1,2]/(Table1[1,1] + Table1[1,2])
+```
+
+Question 3 is true, male rate is higher
+
+```{r Question 4}
+ggplot(parole, aes(x=state, fill = violator)) + geom_bar() + theme_bw()
+```
+
+Plot shows louisiana at almost 50% everywhere else is much lower. True
+
+```{r Question 5}
+ggplot(parole, aes(x=max.sentence, fill=violator)) + geom_bar() + theme_bw()
+```
+
+
+Question 5 is true, it seems very similar in rates at long sentences, 
+but short, some are 50% or higher
+
+```{r log model}
+parole_model = 
+  logistic_reg(mode = "classification") %>% #note the use of logistic_reg
+  set_engine("glm") #standard logistic regression engine is glm
+
+parole_recipe = recipe(violator ~ state, parole)
+
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe) %>% 
+  add_model(parole_model)
+
+parole_fit = fit(logreg_wf, parole)
+summary(parole_fit$fit$fit$fit)
+```
+
+
+
+
+
+
+
+1 is the default which is other states
+AIC is 390.89
+
+
+```{r training log model}
+parole_model2 = 
+  logistic_reg(mode = "classification") %>% #note the use of logistic_reg
+  set_engine("glm") #standard logistic regression engine is glm
+
+parole_recipe2 = recipe(violator ~ state + multiple.offenses + race, train) %>%
+  step_dummy(all_nominal(), -all_outcomes()) #exclude the response variable from being dummy converted  
+
+logreg_wf = workflow() %>%
+  add_recipe(parole_recipe2) %>% 
+  add_model(parole_model2)
+
+parole_fit2 = fit(logreg_wf, train)
+summary(parole_fit2$fit$fit$fit)
+```
+
+
+All variables have significant values over 0.05
+
+
+```{r Q9}
+newdata1 = data.frame(state="3", multiple.offenses = "1", race = "1")
+predict(parole_fit2, newdata1, type="prob")
+```
+
+the probability that they will violate parole is 0.44
+
+Develop predictions  
+```{r}
+predictions = predict(parole_fit2, train, type="prob") #develop predicted probabilities
+head(predictions)
+```
+Let's extract just the "Yes" prediction.  
+```{r}
+predictions = predict(parole_fit2, train, type="prob")[2]
+head(predictions)
+```
+
+
+Threshold selection  
+```{r ROC}
+#Change this next line to the names of your predictions and the response variable in the training data frame
+ROCRpred = prediction(predictions, train$violator) 
+
+###You shouldn't need to ever change the next two lines:
+ROCRperf = performance(ROCRpred, "tpr", "fpr")
+plot(ROCRperf, colorize=TRUE, print.cutoffs.at=seq(0,1,by=0.1), text.adj=c(-0.2,1.7))
+```
+
+```{r AOC}
+as.numeric(performance(ROCRpred, "auc")@y.values)
+```
+
+
+```{r Q10}
+#Determine threshold to balance sensitivity and specificity
+#DO NOT modify this code
+opt.cut = function(perf, pred){
+    cut.ind = mapply(FUN=function(x, y, p){
+        d = (x - 0)^2 + (y-1)^2
+        ind = which(d == min(d))
+        c(sensitivity = y[[ind]], specificity = 1-x[[ind]], 
+            cutoff = p[[ind]])
+    }, perf@x.values, perf@y.values, pred@cutoffs)
+}
+print(opt.cut(ROCRperf, ROCRpred))
+```
+
+Test thresholds to evaluate accuracy  
+```{r}
+#confusion matrix
+#The "No" and "Yes" represent the actual values
+#The "FALSE" and "TRUE" represent our predicted values
+t1 = table(train$violator,predictions > 0.2015788)
+t1
+```
+
+Calculate accuracy  
+```{r}
+(t1[1,1]+t1[2,2])/nrow(train)
+```
+Sensitivity
+```{r}
+56/(22+56)
+```
+
+Specificity
+```{r}
+501/(501+96)
+```
+
+Can apply trial and error to maximize accuracy (here trying 0.2 as threshold)
+```{r}
+t1 = table(train$violator,predictions > 0.2)
+t1
+(t1[1,1]+t1[2,2])/nrow(train)
+```
+
+Threshold = 0.3  
+```{r}
+t1 = table(train$violator,predictions > 0.3)
+t1
+(t1[1,1]+t1[2,2])/nrow(train)
+```
+
+Can apply trial and error to maximize accuracy (here trying 0.4 threshold)
+```{r}
+t1 = table(train$violator,predictions > 0.4)
+t1
+(t1[1,1]+t1[2,2])/nrow(train)
+```
+
+Threshold = 0.5 
+```{r}
+t1 = table(train$violator,predictions > 0.5)
+t1
+(t1[1,1]+t1[2,2])/nrow(train)
+```
+

@@ -1,0 +1,140 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+# BAN 502 Predictive Analytics
+
+## Module 2, 1st R Assignment
+
+### Matthew Field
+
+
+```{r load packages and data}
+library(tidyverse)
+library(tidymodels)
+library(GGally)
+library(lmtest)
+air = airquality
+```
+
+### Reviewing Questions
+
+Question 1 How many rows are in the “air” dataframe?
+This is a 153x6 dataframe, there are 153 rows.
+
+Question 2 How many columns are in the “air” dataframe?
+This is a 153x6 dataframe, there are 6 columns.
+
+Question 3 True/False: There is missing data in “Ozone” variable in the dataframe.
+```{r Question 3}
+summary(air)
+# check for NAs or NAs in the values such as characters.
+```
+There are 44 NA's in 2 variables.
+
+Question 4 Which variable is most likely to be the response (Y) variable?
+```{r Question 4, 5, 6}
+head(air)
+# wind temp month and day are all not likely response variables, ozone seems most likely
+model_1 <- lm(air)
+summary(model_1)
+
+air2 = air %>%
+  drop_na()
+```
+Ozone
+
+Question 5 How many rows remain in this new (air2) data frame?
+with the rows removed containing NA, there are 111 remaining rows.
+
+Question 6 How many columns remain in this new (air2) data frame?
+Same amount of columns, 6
+
+Question 7 Which variable is most strongly correlated with the “Ozone” variable?
+```{r Question 7 and 8}
+ggpairs(air2) # plots lots of helpful data included correlation to other variables
+ggcorr(air2, label = TRUE) #shows quick correlation values
+```
+
+Temperature is most strongly correlated.
+
+Question 8 Which variable is least strongly correlated with the “Ozone” variable?
+Day is least strongly correlated
+
+Question 9 Plot “Temp” (x axis) versus “Ozone” (y axis) using the “ggplot” function. Choose an appropriate chart type. Which statement best describes the relationship between “Temp” and “Ozone”?
+
+```{r Question 9}
+ggplot(air2, aes(x=Temp, y = Ozone)) + 
+  geom_point() +
+  geom_smooth(method = 'lm')
+```
+
+As temperature increases, ozone increases
+
+Question 10 What is the slope of this regression model (to four decimal places)?
+```{r Question 10}
+ozone_simple = recipe(Ozone ~ Temp, air2)
+
+#Next we specify the type of model that we are building.  
+lm_model = #give the model type a name 
+  linear_reg() %>% #specify that we are doing linear regression
+  set_engine("lm") #specify the specify type of linear tool we want to use 
+
+ 
+#Next we combine the recipe and the model with a workflow.  
+
+lm_wflow = 
+  workflow() %>% 
+  add_model(lm_model) %>% 
+  add_recipe(ozone_simple)
+
+ 
+#Next we fit (execute) the workflow on our dataset.  
+
+lm_fit = fit(lm_wflow, air2)
+summary(lm_fit$fit$fit$fit)
+```
+
+The slope for this model is 2.4391
+
+Question 11 what is the R-squared value of this model (not Adjusted R-squared) (to three decimal places)?
+The R^2 is 0.488
+
+Question 12 Is the “Temp” variables significant in the model?
+Yes because p-value is less than 0.05
+
+Question 13 Use the code below to generate 95% confidence intervals for the coefficients. Note that you may need to change “lm_fit” to the name of your model fit if you used a different name
+True/False: A 95% confidence interval for the slope coefficient does not contain zero.
+
+```{r Question 14}
+confint(lm_fit$fit$fit$fit)
+```
+
+
+
+Question 14: Using your linear regression model with “Temp” to predict “Ozone”, what is the predicted
+“Ozone” value when “Temp” is equal to 80 (to two decimal places)?
+47.48
+
+Question 15 Perform appropriate model diagnostics to verify whether or not the model appears to meet the four linear regression model assumptions.
+True/False: There is no evidence of non-independent (autocorrelated) residuals.
+
+The predictor and response variable have a linear relationship, yes, shows linear, and fits relatively well
+Model errors (residuals) are independent (recall that a residual is the difference between a predicted value and the actual value)
+```{r dw test}
+dwtest(lm_fit$fit$fit$fit)
+```
+passes dw test
+Model residuals exhibit constant variance, false
+```{r}
+air2 = air2 %>% mutate(resid_air2 = lm_fit$fit$fit$fit$residuals) #add the model residuals to our data frame
+ggplot(air2,aes(x=sqrt(Temp),y=resid_air2)) + geom_point() + theme_bw()
+
+ggplot(air2,aes(x=resid_air2)) + geom_histogram() + theme_bw()
+```
+
+Model residuals are Normally-distributed
+They are with some outliers
+
+

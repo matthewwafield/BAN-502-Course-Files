@@ -1,0 +1,13 @@
+
+# Module 1 Assign 2 Quiz
+
+## Matthew Field
+
+### Inventory Review
+
+```{r load packages}
+library(tidyverse)
+library(esquisse)
+InventoryData <- read_csv("InventoryData.csv")
+```
+
